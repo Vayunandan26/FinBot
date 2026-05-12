@@ -6,9 +6,9 @@ import math
 import os
 
 
-FILENAME = 'your_bigquery_results.csv'
+FILENAME = 'bigquery_article_results.csv'
 BATCH_SIZE = 11628
-MAX_WORKERS = 10
+MAX_WORKERS = 20
 OUTPUT_DIR = 'batches'  
 
 def get_text_with_timeout(url):
