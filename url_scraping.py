@@ -4,25 +4,37 @@ from trafilatura import extract
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import math
 import os
+import time
 
 
 FILENAME = 'bigquery_article_results.csv'
 BATCH_SIZE = 11628
-MAX_WORKERS = 20
+MAX_WORKERS = 10
 OUTPUT_DIR = 'batches'  
 
-def get_text_with_timeout(url):
-    try:
-        response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
-        if response.status_code == 200:
-            result = extract(response.text)
-            return result if result else "Could not extract text"
-        else:
-            return f"Failed: Status {response.status_code}"
-    except requests.exceptions.Timeout:
-        return "Skipped: Connection Timeout"
-    except Exception as e:
-        return f"Error: {str(e)}"
+
+def get_text_with_timeout(url, retries=3):
+    for attempt in range(retries):
+        try:
+            response = requests.get(
+                url, 
+                timeout=10, 
+                headers={'User-Agent': 'Mozilla/5.0'}
+            )
+            if response.status_code == 200:
+                result = extract(response.text)
+                return result if result else "Could not extract text"
+            else:
+                return f"Failed: Status {response.status_code}"
+                
+        except requests.exceptions.Timeout:
+            return "Skipped: Connection Timeout"
+            
+        except Exception as e:
+            if "getaddrinfo failed" in str(e) and attempt < retries - 1:
+                time.sleep(2 ** attempt)  # wait 1s, 2s before retrying
+                continue
+            return f"Error: {str(e)}"
 
 def batch_output_path(batch_number):
     return os.path.join(OUTPUT_DIR, f'scraped_batch_{batch_number}.csv')
@@ -47,7 +59,11 @@ def run_batch(df, batch_number):
         count = 0
         for future in as_completed(future_to_index):
             idx = future_to_index[future]
-            results[idx] = future.result()
+            try:
+                result = future.result()
+                results[idx] = result if result is not None else "Could not extract text"
+            except Exception as exc:
+                results[idx] = f"Error: {exc}"
             count += 1
             if count % 100 == 0:
                 print(f"  {count}/{len(urls)} done...")
