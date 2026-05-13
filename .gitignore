@@ -219,3 +219,6 @@ __marimo__/
 
 #csv file
 bigquery_article_results.csv
+
+batches/
+cleaned/
