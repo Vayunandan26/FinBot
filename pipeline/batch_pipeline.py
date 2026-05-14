@@ -377,6 +377,10 @@ def main():
     BATCHES_FOLDER.mkdir(parents=True, exist_ok=True)
     OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
 
+    if SYNC_MODE == "rclone":
+        logging.info("Pushing existing backlog in cleaned/ to shared storage...")
+        subprocess.run(["rclone", "copy", str(OUTPUT_FOLDER), RCLONE_REMOTE])
+
     logging.info("=" * 55)
     logging.info("  Pipeline started")
     logging.info(f"  Batches folder : {BATCHES_FOLDER}")
