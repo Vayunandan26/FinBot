@@ -1,0 +1,54 @@
+# .dvc/config
+# ===========
+# DVC remote storage configuration.
+# This file is committed to Git so all teammates share the same remote setup.
+# The actual credentials (OAuth tokens, SSH keys) stay on each person's machine.
+#
+# To activate a remote, uncomment the relevant block and run:
+#     dvc remote default <remote-name>
+#
+# Then push your data:
+#     dvc push
+#
+# Teammates pull with:
+#     dvc pull
+
+[core]
+    autostage = true        # auto-run `git add` on .dvc files after dvc add/run
+
+
+# =============================================================================
+# OPTION 1 — Google Drive (recommended for zero-budget remote teams)
+# =============================================================================
+# Setup (one-time, run on your machine):
+#     pip install dvc-gdrive
+#     dvc remote add -d gdrive gdrive://<folder-id>
+#     dvc remote modify gdrive gdrive_acknowledge_abuse true
+#
+# Get your folder ID from the Google Drive URL:
+#     https://drive.google.com/drive/folders/<THIS-IS-YOUR-FOLDER-ID>
+#
+# [remote "gdrive"]
+#     url = gdrive://your-google-drive-folder-id
+#     gdrive_acknowledge_abuse = true
+
+
+# =============================================================================
+# OPTION 2 — SSH / SFTP (if someone on the team has a server or VPS)
+# =============================================================================
+# Setup:
+#     dvc remote add -d sshremote ssh://user@yourserver.com/path/to/dvc-storage
+#     dvc remote modify sshremote keyfile ~/.ssh/id_rsa
+#
+# [remote "sshremote"]
+#     url = ssh://user@yourserver.com/path/to/dvc-storage
+
+
+# =============================================================================
+# OPTION 3 — Local shared folder (same machine or mounted network drive)
+# =============================================================================
+# Setup:
+#     dvc remote add -d localremote /mnt/shared-drive/dvc-storage
+#
+# [remote "localremote"]
+#     url = /mnt/shared-drive/dvc-storage
