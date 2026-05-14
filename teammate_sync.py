@@ -149,16 +149,10 @@ def sync_once():
             "--update",             # skip files that haven't changed
             "--transfers", "4",     # download up to 4 files simultaneously
             "--stats", "0",         # suppress per-file progress spam
-            RCLONE_REMOTE,          # source: shared Google Drive folder
-            str(LOCAL_CLEANED),     # destination: local cleaned/ folder
-            "--update",             # skip files that haven't changed
-            "--transfers", "4",     # download up to 4 files simultaneously
-            "--stats", "0",         # suppress per-file progress spam
         ],
         capture_output=True,
         text=True,
-        timeout=300,                # 5-minute timeout per sync cycle
-        timeout=300,                # 5-minute timeout per sync cycle
+        timeout=300                # 5-minute timeout per sync cycle               # 5-minute timeout per sync cycle
     )
 
     if result.returncode == 0:
