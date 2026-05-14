@@ -18,6 +18,9 @@ What runs:
     4. Every cleaned CSV is immediately synced to shared storage so teammates
        receive files as they are produced, one by one.
 
+    4. Every cleaned CSV is immediately synced to shared storage so teammates
+       receive files as they are produced, one by one.
+
 Folder layout:
     pipeline/                       <- all scripts live here
         batch_pipeline.py
@@ -34,13 +37,16 @@ Folder layout:
 Requirements:
     pip install pandas watchdog requests trafilatura reportlab
     rclone  (system install — see README for setup, only needed if SYNC_MODE = "rclone")
+    rclone  (system install — see README for setup, only needed if SYNC_MODE = "rclone")
 """
 
 import sys
 import time
 import shutil
+import shutil
 import logging
 import tempfile
+import subprocess
 import subprocess
 import threading
 from pathlib import Path
@@ -53,6 +59,9 @@ from watchdog.events import FileSystemEventHandler
 PIPELINE_DIR = Path(__file__).parent
 sys.path.insert(0, str(PIPELINE_DIR))
 
+from normalize_scraped_news import process as normalize
+from filter_business import process as filter_business
+import url_scraping as url_scraping
 from normalize_scraped_news import process as normalize
 from filter_business import process as filter_business
 import url_scraping as url_scraping
@@ -85,8 +94,8 @@ SETTLE_DELAY   = 5           # seconds to wait after a new file appears
 #
 # =============================================================================
 
-SYNC_MODE     = "off"                               # "rclone" | "folder" | "off"
-RCLONE_REMOTE = "gdrive:your-team-folder/cleaned"   # only used when SYNC_MODE = "rclone"
+SYNC_MODE     = "rclone"                            # "rclone" | "folder" | "off"
+RCLONE_REMOTE = "gdrive:large-files/cleaned"   # only used when SYNC_MODE = "rclone"
 SYNC_FOLDER   = Path("/mnt/team-share/cleaned")     # only used when SYNC_MODE = "folder"
 
 # =============================================================================
@@ -118,6 +127,85 @@ def output_path_for(raw_path: Path) -> Path:
     if not stem.endswith("_cleaned"):
         stem = stem + "_cleaned"
     return OUTPUT_FOLDER / (stem + ".csv")
+
+# =============================================================================
+# SYNC: push one cleaned file to shared storage immediately after it is written
+#
+# Called once per batch, right after process_file succeeds.
+# Runs in a background daemon thread so it never blocks the pipeline loop.
+# A sync failure is logged as a warning only — it never affects the local file,
+# which is already safely written to cleaned/ before sync is attempted.
+# =============================================================================
+
+def _sync_worker(out_path: Path):
+    """
+    Does the actual upload. Runs in a background thread.
+    Never raises — all errors are caught and logged as warnings.
+    """
+
+    if SYNC_MODE == "rclone":
+        # `rclone copy <file> <remote:folder>` uploads only that one file.
+        # --retries and --low-level-retries handle transient network blips.
+        try:
+            result = subprocess.run(
+                [
+                    "rclone", "copy",
+                    str(out_path),          # source: the finished local CSV
+                    RCLONE_REMOTE,          # destination: configured remote folder
+                    "--retries", "3",
+                    "--low-level-retries", "3",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300,               # 5-minute hard timeout per file
+            )
+            if result.returncode == 0:
+                logging.info(f"  SYNCED → {RCLONE_REMOTE}/{out_path.name}")
+            else:
+                logging.warning(
+                    f"  SYNC FAILED (rclone): {out_path.name}\n"
+                    f"    stderr: {result.stderr.strip()}"
+                )
+        except FileNotFoundError:
+            logging.warning(
+                "  SYNC SKIPPED: rclone not found on this machine. "
+                "Install rclone or set SYNC_MODE = 'off'."
+            )
+        except subprocess.TimeoutExpired:
+            logging.warning(
+                f"  SYNC TIMEOUT: {out_path.name} took over 5 minutes — skipped. "
+                "File is safe locally in cleaned/."
+            )
+        except Exception as e:
+            logging.warning(f"  SYNC ERROR (rclone): {out_path.name} — {e}")
+
+    elif SYNC_MODE == "folder":
+        # shutil.copy2 copies the file and preserves its timestamps.
+        try:
+            SYNC_FOLDER.mkdir(parents=True, exist_ok=True)
+            dest = SYNC_FOLDER / out_path.name
+            shutil.copy2(out_path, dest)
+            logging.info(f"  SYNCED → {dest}")
+        except Exception as e:
+            logging.warning(f"  SYNC FAILED (folder): {out_path.name} — {e}")
+
+
+def sync_to_shared(out_path: Path):
+    """
+    Fire-and-forget sync. Launches _sync_worker in a background daemon thread
+    and returns immediately — the pipeline loop is never blocked by upload speed.
+    Does nothing if SYNC_MODE is "off".
+    """
+    if SYNC_MODE == "off":
+        return
+
+    t = threading.Thread(
+        target=_sync_worker,
+        args=(out_path,),
+        daemon=True,                        # killed automatically if main process exits
+        name=f"sync-{out_path.stem}",
+    )
+    t.start()
 
 # =============================================================================
 # SYNC: push one cleaned file to shared storage immediately after it is written
@@ -238,6 +326,10 @@ def process_file(raw_path: Path):
         # Runs in background — pipeline does not wait for the upload to finish.
         sync_to_shared(out_path)
 
+        # Push the finished cleaned file to shared storage immediately.
+        # Runs in background — pipeline does not wait for the upload to finish.
+        sync_to_shared(out_path)
+
     except Exception as e:
         logging.error(f"  FAILED: {raw_path.name} — {e} (raw file kept for inspection)\n")
         if tmp_path:
@@ -290,6 +382,11 @@ def main():
     logging.info(f"  Batches folder : {BATCHES_FOLDER}")
     logging.info(f"  Output folder  : {OUTPUT_FOLDER}")
     logging.info(f"  Target         : {TARGET_COUNT} cleaned files")
+    logging.info(f"  Sync mode      : {SYNC_MODE}")
+    if SYNC_MODE == "rclone":
+        logging.info(f"  Sync remote    : {RCLONE_REMOTE}")
+    elif SYNC_MODE == "folder":
+        logging.info(f"  Sync folder    : {SYNC_FOLDER}")
     logging.info(f"  Sync mode      : {SYNC_MODE}")
     if SYNC_MODE == "rclone":
         logging.info(f"  Sync remote    : {RCLONE_REMOTE}")

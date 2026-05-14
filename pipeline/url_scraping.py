@@ -6,6 +6,8 @@ import math
 import os
 import time
 from pathlib import Path
+import logging
+logging.getLogger("trafilatura").setLevel(logging.ERROR)
 
 # =============================================================================
 # CONFIG
@@ -19,7 +21,7 @@ BATCH_SIZE   = 11628
 MAX_WORKERS  = 10
 OUTPUT_DIR   = ROOT_DIR / 'batches'              # ../batches/
 CLEANED_DIR  = ROOT_DIR / 'cleaned'              # ../cleaned/
-
+   
 
 def get_text_with_timeout(url, retries=3):
     for attempt in range(retries):
