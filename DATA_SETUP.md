@@ -1,13 +1,30 @@
 # Data Setup Guide for Teammates
 ## Business & Finance RAG Chatbot — Pipeline Data Access
 
-This project uses **DVC** for data version control alongside Git.
-Code lives in Git. Data lives in DVC-managed shared storage.
-You need both to work on this project.
+This project uses:
+- **Git** for code version control
+- **DVC** for tracking which version of the data exists (pointer files only)
+- **rclone + Google Drive** for the actual data sharing
+
+You do not need a GCP account. You only need a regular Gmail account and
+access to the shared Google Drive folder (the pipeline owner will share it with you).
 
 ---
 
-## One-Time Setup (do this once on your machine)
+## How Data Flows
+
+```
+Owner's machine                  Google Drive              Your machine
+────────────────                 ────────────              ────────────
+batch_pipeline.py runs
+  → cleans a batch
+  → sync_to_shared()   ──────→  cleaned/ folder  ──────→  teammate_sync.py
+  → next batch...                 grows live                pulls every 60s
+```
+
+---
+
+## One-Time Setup (do this once)
 
 ### 1. Clone the repo
 ```bash
@@ -22,69 +39,83 @@ pip install -r requirements.txt
 
 ### 3. Install DVC
 ```bash
-pip install dvc dvc-gdrive
+pip install dvc
 ```
 
-### 4. Authenticate with shared storage (Google Drive)
+### 4. Install rclone
+
+**Mac:**
 ```bash
-dvc pull
+brew install rclone
 ```
-Your browser will open and ask you to sign in with Google.
-Use the Google account that has access to the shared team Drive folder.
-DVC will download all the cleaned CSVs automatically.
 
-That's it. Your `cleaned/` folder now has the same data as everyone else.
+**Linux:**
+```bash
+sudo apt install rclone
+```
+
+**Windows:**
+Download the installer from https://rclone.org/downloads/
+
+### 5. Connect rclone to Google Drive
+
+Run the interactive setup:
+```bash
+rclone config
+```
+
+Follow these steps exactly:
+- Press `n` → new remote
+- Name it exactly: `gdrive`
+- Type `drive` and press Enter (Google Drive)
+- Leave client ID blank → press Enter
+- Leave client secret blank → press Enter
+- Press `1` for full access scope
+- Leave root folder blank → press Enter
+- Leave service account blank → press Enter
+- Press `y` for auto config → your browser opens
+- Sign in with your Gmail account → click Allow
+- Press `y` to confirm
+- Press `q` to quit config
+
+### 6. Ask the pipeline owner to share the Drive folder with your Gmail
+
+The owner goes to Google Drive, right-clicks the shared folder → Share → adds your Gmail as Editor. Once they do this you have access.
+
+### 7. Update RCLONE_REMOTE in teammate_sync.py
+
+Open `teammate_sync.py` and update this line to match the folder name the owner shared with you:
+
+```python
+RCLONE_REMOTE = "gdrive:finance-chatbot-data/cleaned"   # ← use actual folder name
+```
+
+### 8. Run the sync watcher
+
+```bash
+python teammate_sync.py
+```
+
+Leave this running in a terminal. It pulls new files every 60 seconds automatically. Your `cleaned/` folder grows as the pipeline produces files.
 
 ---
 
 ## Daily Workflow
 
-### Get the latest code AND data
+### Get the latest code
 ```bash
-git pull        # gets latest code + .dvc pointer files
-dvc pull        # downloads any new data files that the pipeline produced
+git pull
 ```
 
-Run these two commands together every morning before starting work.
-
-### Check what data has changed
+### Get the latest data (if sync watcher is not running)
 ```bash
-dvc status      # shows which data files are out of date
+rclone sync gdrive:finance-chatbot-data/cleaned/ ./cleaned/ --update
 ```
 
-### If you ran the pipeline yourself and want to share new data
+### Start the live sync watcher
 ```bash
-dvc push        # uploads your new cleaned CSVs to shared storage
-git add cleaned.dvc
-git commit -m "add cleaned batches 10-20"
-git push
-```
-
----
-
-## Receiving Files as the Pipeline Produces Them
-
-The pipeline owner's machine syncs each cleaned CSV to Google Drive
-the moment it finishes processing. To get files as they appear
-(without waiting for a manual `dvc push`), run this sync watcher:
-
-```bash
-# Install rclone (one-time)
-# Mac:
-brew install rclone
-# Linux:
-sudo apt install rclone
-
-# Configure rclone with Google Drive (one-time, interactive)
-rclone config
-# Follow prompts → choose Google Drive → name it "gdrive"
-
-# Run the live sync watcher (keep this terminal open)
 python teammate_sync.py
 ```
-
-`teammate_sync.py` checks for new files every 60 seconds and copies
-them into your local `cleaned/` folder automatically.
 
 ---
 
@@ -92,65 +123,49 @@ them into your local `cleaned/` folder automatically.
 
 ```
 your-repo/
-├── pipeline/                   ← all Python scripts (in Git)
+├── pipeline/                        ← all Python scripts (in Git)
 │   ├── batch_pipeline.py
 │   ├── url_scraping.py
 │   ├── normalize_scraped_news.py
 │   └── filter_business.py
 │
-├── dvc.yaml                    ← DVC pipeline definition (in Git)
+├── teammate_sync.py                 ← run this to receive data (in Git)
+├── dvc.yaml                         ← DVC pipeline definition (in Git)
 ├── .dvc/
-│   └── config                  ← DVC remote config (in Git)
-├── .dvcignore                  ← what DVC ignores (in Git)
-├── .gitignore                  ← what Git ignores (in Git)
+│   └── config                       ← DVC config (in Git)
+├── .dvcignore                        ← what DVC ignores (in Git)
+├── .gitignore                        ← what Git ignores (in Git)
+├── DATA_SETUP.md                     ← this file (in Git)
 │
-├── bigquery_article_results.csv    ← NOT in Git, tracked by DVC
-├── batches/                        ← NOT in Git, tracked by DVC
-└── cleaned/                        ← NOT in Git, tracked by DVC
-```
-
-Files ending in `.dvc` (like `cleaned.dvc`) ARE in Git — they are
-tiny pointer files that tell DVC where the real data lives.
-Never delete them.
-
----
-
-## Reproducing the Full Pipeline from Scratch
-
-If you want to run the pipeline yourself end-to-end:
-
-```bash
-dvc repro
-```
-
-DVC will run only the stages whose inputs have changed since the last run.
-To force a full re-run from scratch:
-
-```bash
-dvc repro --force
-```
-
-To check what would run without actually running it:
-
-```bash
-dvc status
+├── bigquery_article_results.csv      ← NOT in Git (too large)
+├── batches/                          ← NOT in Git (temporary, deleted after processing)
+└── cleaned/                          ← NOT in Git (synced via rclone)
 ```
 
 ---
 
 ## Troubleshooting
 
-**`dvc pull` asks for Google authentication every time**
-Run `dvc remote modify gdrive gdrive_use_service_account false` and re-authenticate once.
+**`rclone config` browser doesn't open**
+Run `rclone authorize "drive"` separately, copy the token, and paste it back into config.
 
-**`dvc pull` says "no data to pull"**
-The pipeline owner hasn't pushed yet. Ask them to run `dvc push`,
-or use the live sync watcher (`teammate_sync.py`) instead.
+**`teammate_sync.py` says "Cannot reach remote"**
+- Make sure you named the remote exactly `gdrive` during rclone config
+- Make sure the owner has shared the Drive folder with your Gmail
+- Double-check `RCLONE_REMOTE` in `teammate_sync.py` matches the actual folder name
 
-**A cleaned CSV on your machine differs from a teammate's**
-Run `dvc status` — if it shows a mismatch, run `dvc pull` to overwrite
-your local copy with the version from shared storage.
+**Files appear in Drive but not in your local cleaned/**
+Make sure `RCLONE_REMOTE` includes `/cleaned` at the end:
+```python
+RCLONE_REMOTE = "gdrive:finance-chatbot-data/cleaned"   # correct
+RCLONE_REMOTE = "gdrive:finance-chatbot-data"           # wrong — too broad
+```
 
-**`dvc repro` re-runs a stage you didn't change**
-Check if any of the `deps` files for that stage changed — DVC re-runs
-a stage whenever any dependency file is modified. This is correct behaviour.
+**Sync watcher keeps timing out**
+Your internet connection is slow relative to file size. Increase the timeout in `teammate_sync.py`:
+```python
+timeout=600    # increase from 300 to 600 seconds
+```
+
+**`dvc status` shows everything as changed**
+This is expected — DVC tracks pointers, not live files. Run `dvc add cleaned/` and `git commit` after a full pipeline run to snapshot that version. Between runs, use rclone for live access.
