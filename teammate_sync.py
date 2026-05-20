@@ -98,43 +98,7 @@ def check_rclone():
         return False
 
 
-
-def check_rclone():
-    """Verify rclone is installed and the remote is reachable before starting."""
-    try:
-        result = subprocess.run(
-            ["rclone", "lsd", RCLONE_REMOTE],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            logging.error(
-                f"Cannot reach remote '{RCLONE_REMOTE}'.\n"
-                f"  Error: {result.stderr.strip()}\n"
-                f"  Make sure:\n"
-                f"    1. rclone is installed\n"
-                f"    2. You ran `rclone config` and named the remote 'gdrive'\n"
-                f"    3. The pipeline owner shared the Drive folder with your Gmail\n"
-                f"    4. RCLONE_REMOTE in this file matches the actual folder name"
-            )
-            return False
-        return True
-    except FileNotFoundError:
-        logging.error(
-            "rclone not found. Install it first:\n"
-            "  Mac:   brew install rclone\n"
-            "  Linux: sudo apt install rclone\n"
-            "Then run `rclone config` to connect your Google account."
-        )
-        return False
-
-
 def sync_once():
-    """
-    Pull any new or updated CSV files from shared Drive into local cleaned/.
-    Uses rclone sync with --update so only new/changed files are downloaded.
-    """
     """
     Pull any new or updated CSV files from shared Drive into local cleaned/.
     Uses rclone sync with --update so only new/changed files are downloaded.

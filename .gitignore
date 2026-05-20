@@ -225,4 +225,6 @@ bigquery_article_results.csv
 batches/
 cleaned/
 
+data/
+
 .DS_Store
