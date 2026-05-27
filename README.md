@@ -1,2 +1,4 @@
-# BusinessBot
-Chatbot to discuss daily updates and trends in Business 
+# FinBot
+
+FinBot is an AI-powered chatbot designed to answer business and finance-related questions with accuracy and depth. 
+It is built on a Retrieval-Augmented Generation (RAG) architecture, meaning it grounds its responses in a curated knowledge base rather than relying purely on model intuition. The knowledge base is sourced and processed through a custom data pipeline that ensures only high-quality, relevant content makes it through. Users can ask FinBot questions about financial concepts, markets, companies, and economic topics and expect well-informed, reliable answers. The goal is to make financial knowledge more accessible and conversational, whether for students, professionals, or anyone looking to better understand the business world.
