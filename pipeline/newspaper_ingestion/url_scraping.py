@@ -14,14 +14,13 @@ logging.getLogger("trafilatura").setLevel(logging.ERROR)
 # =============================================================================
 
 PIPELINE_DIR = Path(__file__).parent
-ROOT_DIR     = PIPELINE_DIR.parent               # one level above pipeline/
+ROOT_DIR     = PIPELINE_DIR.parent.parent               # one level above pipeline/
 
 FILENAME     = ROOT_DIR / 'bigquery_article_results.csv'
 BATCH_SIZE   = 11628
 MAX_WORKERS  = 10
-OUTPUT_DIR   = ROOT_DIR / 'batches'              # ../batches/
-CLEANED_DIR  = ROOT_DIR / 'cleaned'              # ../cleaned/
-   
+OUTPUT_DIR   = ROOT_DIR / 'batches'             
+CLEANED_DIR  = ROOT_DIR / "data" / "cleaned_articles"     
 
 def get_text_with_timeout(url, retries=3):
     for attempt in range(retries):

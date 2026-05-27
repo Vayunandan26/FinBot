@@ -228,3 +228,5 @@ cleaned/
 data/
 
 .DS_Store
+
+chroma_db/
